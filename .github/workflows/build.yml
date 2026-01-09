@@ -1,0 +1,173 @@
+name: Build VOD-Downloader EXE
+
+on: 
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests tqdm pyinstaller
+      
+      - name: Verify Installation
+        run: |
+          python -c "import requests; print(f'requests: {requests.__version__}')"
+          python -c "import tqdm; print(f'tqdm: {tqdm.__version__}')"
+          python -c "import PyInstaller; print(f'PyInstaller: {PyInstaller.__version__}')"
+      
+      - name: Build EXE with PyInstaller
+        run: |
+          pyinstaller --onefile --console --name "VOD_Downloader" --add-data "user_agents.txt;." --hidden-import=tqdm --hidden-import=requests --hidden-import=urllib3 --hidden-import=certifi --icon=NONE VOD-Downloader.py
+        shell: cmd
+      
+      - name: Verify EXE Build
+        run: |
+          if (Test-Path "dist/VOD_Downloader.exe") {
+            $size = (Get-Item "dist/VOD_Downloader.exe").Length / 1MB
+            Write-Host "✅ EXE başarıyla oluşturuldu!"
+            Write-Host "📦 Dosya Boyutu: $([math]::Round($size, 2)) MB"
+            Write-Host "📂 Konum: dist/VOD_Downloader.exe"
+          } else {
+            Write-Host "❌ EXE dosyası bulunamadı!"
+            exit 1
+          }
+        shell: pwsh
+      
+      - name: Create README for Release
+        run: |
+          @"
+          # VOD Downloader Pro + Auto Turkey Proxy
+          
+          ## 📦 İndirme Talimatları
+          
+          1. **VOD_Downloader.exe** dosyasını indirin
+          2. Çift tıklayarak çalıştırın
+          3. İlk başlatmada 1-2 dakika bekleyin (Proxy havuzu oluşturuluyor)
+          
+          ## ⚙️ Sistem Gereksinimleri
+          
+          - Windows 10/11 (64-bit)
+          - İnternet Bağlantısı
+          - En az 50MB boş alan
+          
+          ## 🚀 Kullanım
+          
+          ### İlk Çalıştırma:
+          1. EXE'yi çalıştırın
+          2. Otomatik olarak 30+ Türk proxy toplanacak
+          3. Ana menü açılacak
+          
+          ### M3U İndirme:
+          1. Menüden **1** seçin
+          2. M3U URL'sini girin
+          3. Kategori seçin
+          4. İndirme otomatik başlar (Türk proxy ile)
+          
+          ## 📁 Oluşan Dosyalar
+          
+          Program çalıştırıldığında bu dosyalar oluşur:
+          - **user_agents.txt** - 40 User-Agent listesi
+          - **turkey_proxies_cache.json** - Proxy önbelleği (1 saat)
+          - **Downloads/** - İndirilen dosyalar
+          
+          ## 🔧 Özellikler
+          
+          - ✅ Otomatik Türkiye Proxy (30+ aktif)
+          - ✅ Akıllı proxy rotasyonu
+          - ✅ Başarısız proxy'leri otomatik temizleme
+          - ✅ Türkçe karakter düzeltme
+          - ✅ Kategori bazlı indirme
+          - ✅ Devam ettirilebilir indirmeler
+          - ✅ Detaylı ilerleme çubuğu
+          
+          ## ⚠️ Sorun Giderme
+          
+          **"Yeterli proxy bulunamadı" hatası:**
+          - İnternet bağlantınızı kontrol edin
+          - VPN kapalı olmalı
+          - Proxy olmadan devam edebilirsiniz (E tuşu)
+          
+          **"requests kütüphanesi bulunamadı" hatası:**
+          - Bu hatayı almamalısınız (EXE'ye gömülü)
+          - Alıyorsanız, EXE bozuk olabilir - yeniden indirin
+          
+          **İndirme hataları:**
+          - Menü 6 → Proxy havuzunu yenileyin
+          - Farklı kategori deneyin
+          
+          ## 📊 Proxy Sistemi
+          
+          - **Otomatik toplama:** 5 farklı kaynaktan
+          - **Lokasyon filtresi:** Sadece Türkiye
+          - **Hız sıralaması:** En hızlı proxy'ler öncelikli
+          - **Otomatik yenileme:** Havuz 10'un altına düşünce
+          - **İstatistik takibi:** Başarı/başarısızlık oranı
+          
+          ## 💡 İpuçları
+          
+          - İlk başlatma en uzun sürendir (proxy toplama)
+          - Cache varsa sonraki başlatmalar çok hızlı
+          - "Tümünü İndir" dikkatli kullanın (onay sorar)
+          - Menü 6'dan proxy durumunu kontrol edebilirsiniz
+          
+          ## 🆘 Destek
+          
+          Sorun yaşıyorsanız GitHub Issues bölümünden bildirin.
+          
+          ---
+          **Build Tarihi:** $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+          **Versiyon:** GitHub Actions Auto Build
+          "@ | Out-File -FilePath "dist/README.txt" -Encoding UTF8
+        shell: pwsh
+      
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VOD-Downloader-Windows-${{ github.run_number }}
+          path: |
+            dist/VOD_Downloader.exe
+            dist/README.txt
+          retention-days: 90
+      
+      - name: Create Release on Tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/VOD_Downloader.exe
+            dist/README.txt
+          body: |
+            ## 🎉 VOD Downloader Pro - Release ${{ github.ref_name }}
+            
+            ### ⬇️ İndirme
+            **VOD_Downloader.exe** dosyasını indirin ve çalıştırın.
+            
+            ### ✨ Özellikler
+            - Otomatik Türkiye Proxy Sistemi (30+ aktif)
+            - M3U kategori bazlı indirme
+            - Türkçe karakter düzeltme
+            - Akıllı proxy rotasyonu
+            
+            ### 📝 Kullanım
+            Detaylı kullanım için **README.txt** dosyasına bakın.
+            
+            ---
+            **Build:** GitHub Actions
+            **Tarih:** ${{ github.event.head_commit.timestamp }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
